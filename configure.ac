@@ -176,8 +176,6 @@ x11_enabled="== X11 enabled. =="
 x11_disabled="== X11 disabled. =="
 pulse_not_found="== Could not find libpulse. PulseAudio support disabled. =="
 pulse_disabled="== PulseAudio support disabled. =="
-dvdcss_enabled="== DVDCSS support enabled. =="
-dvdcss_disabled="== DVDCSS support disabled. =="
 avahi_not_found="== Could not find libavahi-common or libavahi-client. Avahi support disabled. =="
 avahi_disabled="== Avahi support disabled. =="
 mdnsembedded_not_found="== Could not find mDNSEmbedded. Might prevent zeroconf support. =="
@@ -194,8 +192,6 @@ librtmp_not_found="== Could not find libRTMP. RTMP support disabled. =="
 librtmp_disabled="== RTMP support disabled. =="
 libnfs_not_found="== Could not find libnfs. NFS client support disabled. =="
 libnfs_disabled="== NFS support disabled. =="
-libgif_not_found="== Could not find libgif. libgif support disabled. =="
-libgif_disabled="== libgif support disabled. =="
 libshairplay_not_found="== Could not find libshairplay. =="
 samba_disabled="== SAMBA support disabled. =="
 libplist_not_found="== Could not find libplist. AirPlay support disabled. =="
@@ -360,12 +356,6 @@ AC_ARG_ENABLE([nfs],
   [use_libnfs=$enableval],
   [use_libnfs=auto])
 
-AC_ARG_ENABLE([gif],
-  [AS_HELP_STRING([--enable-gif],
-  [enable gif support via libgif (default is auto)])],
-  [use_libgif=$enableval],
-  [use_libgif=auto])
-
 AC_ARG_ENABLE([airplay],
   [AS_HELP_STRING([--enable-airplay],
   [enable AirPlay support(default is auto)])],
@@ -383,12 +373,6 @@ AC_ARG_ENABLE([upnp],
   [disable UPnP support (default is enabled)])],
   [use_upnp=$enableval],
   [use_upnp=yes])
-
-AC_ARG_ENABLE([dvdcss],
-  [AS_HELP_STRING([--enable-dvdcss],
-  [enable DVDCSS support (default is yes)])],
-  [use_dvdcss=$enableval],
-  [use_dvdcss=yes])
 
 AC_ARG_ENABLE([mid],
   [AS_HELP_STRING([--enable-mid],
@@ -680,7 +664,6 @@ if test "$target_platform" = "target_android" ; then
   USE_ANDROID=1
   webserver_checkdepends=yes
   CFLAGS="$CFLAGS -Wno-psabi"
-  DROID_DVDLIB_SEEK64="-D_FILE_OFFSET_BITS=64 -D_OFF_T_DEFINED_ -Doff_t=off64_t -Dlseek=lseek64"
   CXXFLAGS="$CXXFLAGS -Wno-psabi"
   AC_DEFINE(HAS_EGLGLES, [1], [Define if supporting EGL based GLES Framebuffer])
 fi
@@ -911,11 +894,6 @@ AC_LANG_POP([C++])
 
 # Check inotify availability
 AC_CHECK_HEADER([sys/inotify.h], AC_DEFINE([HAVE_INOTIFY],[1],[Define if we have inotify]),)
-
-# Checks for boost headers using CXX instead of CC
-AC_LANG_PUSH([C++])
-AC_CHECK_HEADER([boost/circular_buffer.hpp],, AC_MSG_ERROR($missing_library))
-AC_LANG_POP([C++])
 
 # Python
 if test -z "$PYTHON_NOVERSIONCHECK"; then
@@ -1399,30 +1377,6 @@ else
   AC_MSG_NOTICE($libnfs_disabled)
 fi
 
-# libgif
-if test "$use_libgif" != "no"; then
-  AC_CHECK_HEADERS([gif_lib.h],,
-   [if test "$use_libgif" = "yes"; then
-      AC_MSG_ERROR($libgif_not_found)
-      USE_LIBGIF=0
-    elif test "$use_libgif" != "no"; then
-      AC_MSG_NOTICE($libgif_not_found)
-      use_libgif="no"
-      USE_LIBGIF=0
-    fi
-   ])
-  if test "$use_libgif" != "no"; then
-    XB_FIND_SONAME([GIF], [gif], [use_libgif])
-  fi
-  if test "$use_libgif" != "no"; then
-    AC_DEFINE([HAVE_LIBGIF], [1], [Whether to use libgif library.])
-    USE_LIBGIF=1
-  fi
-else
-  USE_LIBGIF=0
-  AC_MSG_NOTICE($libgif_disabled)
-fi
-
 # libplist for airplay feature
 USE_AIRPLAY=0
 if test "$use_airplay" != "no"; then
@@ -1901,6 +1855,7 @@ AC_C_BIGENDIAN
 
 if test "$cross_compiling" = "yes"; then
   final_message="$final_message\n  Crosscomp.:\tYes"
+  CROSS_COMPILING=yes
   if [[ -d "$NATIVE_ROOT" ]]; then
     CFLAGS_FOR_BUILD="$CFLAGS_FOR_BUILD -I$NATIVE_ROOT/include"
     CXXFLAGS_FOR_BUILD="$CXXFLAGS_FOR_BUILD -I$NATIVE_ROOT/include"
@@ -1999,16 +1954,6 @@ else
   final_message="$final_message\n  Bluray:\tNo"
 fi
 
-# we don't compile with default upstream squish, so we use our own one
-# even on non unified deps platforms
-if test "$cross_compiling" != "yes"; then
-  make -C ${abs_top_srcdir}/tools/depends/native/libsquish-native CXX=${CXX}
-  export PKG_CONFIG_PATH="${abs_top_srcdir}/tools/depends/native/libsquish-native/squish-install/lib/pkgconfig:$PKG_CONFIG_PATH"
-fi
-PKG_CHECK_MODULES([SQUISH], [squish],
- [INCLUDES="$INCLUDES $SQUISH_CFLAGS" LIBS="$LIBS $SQUISH_LIBS"],
- AC_MSG_ERROR("squish not found"))
-
 if test "x$use_texturepacker" != "xno"; then
   AC_PATH_PROG([TEXTUREPACKER], [TexturePacker], ["none"],
     [$PATH$PATH_SEPARATOR${abs_top_srcdir}/tools/depends/native/TexturePacker/bin])
@@ -2073,24 +2018,6 @@ if test "x$use_pulse" != "xno"; then
 else
   XBMC_STANDALONE_SH_PULSE=/dev/null
   final_message="$final_message\n  PulseAudio:\tNo"
-fi
-
-# DVDCSS
-if test "$use_dvdcss" = "yes"; then
-  AC_MSG_NOTICE($dvdcss_enabled)
-  final_message="$final_message\n  DVDCSS:\tYes"
-  BUILD_DVDCSS=1
-  SKIP_CONFIG_DVDCSS=0
-  DVDREAD_CFLAGS="-D_XBMC -DHAVE_DVDCSS_DVDCSS_H"
-else
-  AC_MSG_NOTICE($dvdcss_disabled)
-  final_message="$final_message\n  DVDCSS:\tNo"
-  BUILD_DVDCSS=0
-  SKIP_CONFIG_DVDCSS=1
-  DVDREAD_CFLAGS="-D_XBMC -UHAVE_DVDCSS_DVDCSS_H"
-fi
-if test "$host_vendor" = "apple"; then
- DVDREAD_CFLAGS="$DVDREAD_CFLAGS -D__DARWIN__"
 fi
 
 # Google Test Framework
@@ -2179,12 +2106,6 @@ if test "$use_libnfs" != "no"; then
   final_message="$final_message\n  libnfs client support:Yes"
 else
   final_message="$final_message\n  libnfs client support:No"
-fi
-
-if test "$use_libgif" != "no"; then
-  final_message="$final_message\n  libgif support:\tYes"
-else
-  final_message="$final_message\n  libgif support:\tNo"
 fi
 
 if test "$use_airplay" != "no"; then
@@ -2402,7 +2323,6 @@ AC_SUBST(CFLAGS_FOR_BUILD)
 AC_SUBST(CXXFLAGS_FOR_BUILD)
 AC_SUBST(LDFLAGS_FOR_BUILD)
 AC_SUBST(SDL_DEFINES)
-AC_SUBST(BUILD_DVDCSS)
 AC_SUBST(FFMPEG_LIBDIR)
 AC_SUBST(USE_STATIC_FFMPEG)
 AC_SUBST(GNUTLS_ALL_LIBS)
@@ -2426,7 +2346,6 @@ AC_SUBST(USE_VDPAU)
 AC_SUBST(USE_VAAPI)
 AC_SUBST(USE_LIBSMBCLIENT)
 AC_SUBST(USE_LIBNFS)
-AC_SUBST(USE_LIBGIF)
 AC_SUBST(USE_AIRPLAY)
 AC_SUBST(USE_OPENMAX)
 AC_SUBST(USE_PULSE)
@@ -2451,6 +2370,7 @@ AC_SUBST(USE_SSE4)
 AC_SUBST(USE_MMAL)
 AC_SUBST(USE_X11)
 AC_SUBST(USE_BREAKPAD)
+AC_SUBST(CROSS_COMPILING)
 
 # pushd and popd are not available in other shells besides bash, so implement
 # our own pushd/popd functions
@@ -2501,51 +2421,6 @@ else
 fi
 ])
 ])
-
-XB_CONFIG_MODULE([lib/libdvd/libdvdcss], [
-  ./configure \
-    CC="$CC" \
-    CXX="$CXX" \
-    CFLAGS="$CFLAGS $DROID_DVDLIB_SEEK64" \
-    --prefix="${prefix}" --includedir="${includedir}" --libdir="${libdir}" --datadir="${datadir}" \
-    --host=$host_alias \
-    --build=$build_alias \
-    --target=$target_alias \      
-    --disable-doc \
-    --enable-static \
-    --with-pic
-], [$SKIP_CONFIG_DVDCSS])
-
-XB_CONFIG_MODULE([lib/libdvd/libdvdread], [
-  ./configure2 \
-    --extra-cflags="$CFLAGS $DVDREAD_CFLAGS -I`pwd`/../libdvdcss/src $DROID_DVDLIB_SEEK64" \
-    --prefix="${prefix}" --includedir="${includedir}" --libdir="${libdir}" --datadir="${datadir}" \
-    --host=$host_alias \
-    --build=$build_alias \
-    --target=$target_alias \      
-    --enable-static \
-    --disable-shared \
-    --disable-strip \
-    --disable-opts \
-    --cc="$CC" &&
-  mkdir -p `pwd`/../includes/dvdread
-  cp `pwd`/../libdvdread/src/*.h `pwd`/../includes/dvdread
-  cp `pwd`/../libdvdread/src/dvdread/*.h `pwd`/../includes/dvdread
-], [0])
-
-XB_CONFIG_MODULE([lib/libdvd/libdvdnav], [
-  ./configure2 \
-    --extra-cflags="$CFLAGS $DVDREAD_CFLAGS -I`pwd`/../includes $DROID_DVDLIB_SEEK64" \
-    --extra-ldflags="-L`pwd`/../libdvdread/obj" \
-    --with-dvdread-config="`pwd`/../dvdread-config" \
-    --prefix="${prefix}" --includedir="${includedir}" --libdir="${libdir}" --datadir="${datadir}" \
-    --host=$host_alias \
-    --build=$build_alias \
-    --target=$target_alias \      
-    --enable-static \
-    --disable-shared \
-    --cc="$CC"
-], [0])
 
 XB_CONFIG_MODULE([lib/cpluff], [
   ./configure --disable-nls \

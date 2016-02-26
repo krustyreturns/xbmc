@@ -22,16 +22,14 @@
 
 #include "threads/Thread.h"
 #include "IVideoPlayer.h"
-#include "Interfaces/IVPClockCallback.h"
 #include "DVDMessageQueue.h"
 #include "DVDCodecs/Video/DVDVideoCodec.h"
 #include "DVDClock.h"
 #include "DVDOverlayContainer.h"
 #include "DVDTSCorrection.h"
-#ifdef HAS_VIDEO_PLAYBACK
 #include "cores/VideoPlayer/VideoRenderers/RenderManager.h"
-#endif
 #include "utils/BitstreamStats.h"
+#include <atomic>
 
 class CDemuxStreamVideo;
 
@@ -60,7 +58,7 @@ public:
   unsigned int m_dropRequests;
 };
 
-class CVideoPlayerVideo : public CThread, public IDVDStreamPlayerVideo, public IVPClockCallback
+class CVideoPlayerVideo : public CThread, public IDVDStreamPlayerVideo
 {
 public:
   CVideoPlayerVideo(CDVDClock* pClock
@@ -98,9 +96,7 @@ public:
   std::string GetStereoMode();
   void SetSpeed(int iSpeed);
 
-  // IVPClockCallback interface
-  virtual double GetInterpolatedClock();
-
+  // classes
   CDVDOverlayContainer* m_pOverlayContainer;
   CDVDClock* m_pClock;
 
@@ -150,6 +146,7 @@ protected:
   bool m_stalled;
   IDVDStreamPlayer::ESyncState m_syncState;
   std::string m_codecname;
+  std::atomic_bool m_bAbortOutput;
 
   BitstreamStats m_videoStats;
 
